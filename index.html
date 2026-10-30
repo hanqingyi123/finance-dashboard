@@ -69,7 +69,6 @@
     <div class="big" style="padding:0 0 8px">
       <div class="v" id="monthExp" style="font-size:26px">—</div>
     </div>
-    <canvas id="pieChart"></canvas>
     <div id="catList"></div>
   </div>
 
@@ -96,45 +95,6 @@ if (!token) {
     .then(function (j) { return JSON.parse(j.files['dashboard.json'].content); })
     .then(render)
     .catch(function (e) { document.getElementById('updated').textContent = '加载失败：' + e.message; });
-}
-
-function drawPie(canvas, data) {
-  var dpr = window.devicePixelRatio || 1;
-  var cssW = canvas.clientWidth || canvas.parentElement.clientWidth || 400;
-  var cssH = 180;
-  canvas.width = cssW * dpr;
-  canvas.height = cssH * dpr;
-  canvas.style.width = cssW + 'px';
-  canvas.style.height = cssH + 'px';
-  var ctx = canvas.getContext('2d');
-  ctx.scale(dpr, dpr);
-  ctx.clearRect(0, 0, cssW, cssH);
-  var total = 0;
-  data.forEach(function (d) { total += d.value; });
-  if (total <= 0) return;
-  var cx = cssW / 2, cy = cssH / 2;
-  var R = Math.min(cssW, cssH) / 2 - 16;
-  var r = R * 0.62;
-  var start = -Math.PI / 2;
-  data.forEach(function (d) {
-    var angle = d.value / total * Math.PI * 2;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, R, start, start + angle);
-    ctx.closePath();
-    ctx.fillStyle = d.color;
-    ctx.fill();
-    start += angle;
-  });
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fillStyle = '#1a2130';
-  ctx.fill();
-  ctx.fillStyle = '#e8ecf4';
-  ctx.font = 'bold 14px -apple-system, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(fmtShort(total), cx, cy);
 }
 
 function render(snap) {
@@ -227,12 +187,9 @@ function render(snap) {
   if (cats.length === 0) catHtml = '<div class="empty">本月暂无消费</div>';
   cats.forEach(function (c) {
     var pct = monthTotal > 0 ? (catMap[c] / monthTotal * 100) : 0;
-    catHtml += '<div class="cat-bar"><span class="name">' + c + '</span><span class="bar"><i style="width:' + pct.toFixed(1) + '%"></i></span><span class="amt">' + fmtShort(catMap[c]) + '</span></div>';
+    catHtml += '<div class="cat-bar"><span class="name">' + c + '</span><span class="bar"><i style="width:' + pct.toFixed(1) + '%"></i></span><span class="amt">' + fmtShort(catMap[c]) + ' <span style="font-size:11px;color:#5b6780">' + pct.toFixed(1) + '%</span></span></div>';
   });
   document.getElementById('catList').innerHTML = catHtml;
-  var PIE_COLORS = ['#4f8cff', '#f59e0b', '#a78bfa', '#34d399', '#f87171', '#22d3ee', '#e879f9', '#64748b'];
-  var pieData = cats.map(function (c, i) { return { name: c, value: catMap[c], color: PIE_COLORS[i % PIE_COLORS.length] }; });
-  drawPie(document.getElementById('pieChart'), pieData);
 
   // 最近消费
   var recent = expenses.slice().sort(function (a, b) { return b.date < a.date ? -1 : (b.date > a.date ? 1 : 0); }).slice(0, 10);
