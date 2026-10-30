@@ -50,7 +50,7 @@
     </div>
     <div class="gain-row">
       <div class="g"><div class="v pos" id="gain">—</div><div class="k">累计收益</div></div>
-      <div class="g"><div class="v" id="gainRate">—</div><div class="k">收益率</div></div>
+      <div class="g"><div class="v" id="gainRate">—</div><div class="k">年化 XIRR</div></div>
     </div>
   </div>
 
@@ -69,6 +69,7 @@
     <div class="big" style="padding:0 0 8px">
       <div class="v" id="monthExp" style="font-size:26px">—</div>
     </div>
+    <canvas id="pieChart"></canvas>
     <div id="catList"></div>
   </div>
 
@@ -95,6 +96,45 @@ if (!token) {
     .then(function (j) { return JSON.parse(j.files['dashboard.json'].content); })
     .then(render)
     .catch(function (e) { document.getElementById('updated').textContent = '加载失败：' + e.message; });
+}
+
+function drawPie(canvas, data) {
+  var dpr = window.devicePixelRatio || 1;
+  var cssW = canvas.clientWidth || canvas.parentElement.clientWidth || 400;
+  var cssH = 180;
+  canvas.width = cssW * dpr;
+  canvas.height = cssH * dpr;
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  var ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  ctx.clearRect(0, 0, cssW, cssH);
+  var total = 0;
+  data.forEach(function (d) { total += d.value; });
+  if (total <= 0) return;
+  var cx = cssW / 2, cy = cssH / 2;
+  var R = Math.min(cssW, cssH) / 2 - 16;
+  var r = R * 0.62;
+  var start = -Math.PI / 2;
+  data.forEach(function (d) {
+    var angle = d.value / total * Math.PI * 2;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, R, start, start + angle);
+    ctx.closePath();
+    ctx.fillStyle = d.color;
+    ctx.fill();
+    start += angle;
+  });
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = '#1a2130';
+  ctx.fill();
+  ctx.fillStyle = '#e8ecf4';
+  ctx.font = 'bold 14px -apple-system, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(fmtShort(total), cx, cy);
 }
 
 function render(snap) {
@@ -142,13 +182,14 @@ function render(snap) {
   gainEl.textContent = (gain >= 0 ? '+' : '') + fmt(gain);
   gainEl.className = 'v ' + (gain >= 0 ? 'pos' : 'neg');
   var rateEl = document.getElementById('gainRate');
-  var rate = investCost > 0 ? (gain / investCost * 100) : 0;
-  rateEl.textContent = (rate >= 0 ? '+' : '') + rate.toFixed(2) + '%';
-  rateEl.className = 'v ' + (rate >= 0 ? 'pos' : 'neg');
+  var x = snap.xirr;
+  if (x == null) { rateEl.textContent = '—'; rateEl.className = 'v'; }
+  else { rateEl.textContent = (x >= 0 ? '+' : '') + (x * 100).toFixed(1) + '%'; rateEl.className = 'v ' + (x >= 0 ? 'pos' : 'neg'); }
 
-  // 现金账户
+  // 现金账户（活钱，排除货基）
   var cashHtml = '';
   cash.forEach(function (c) {
+    if (c.name === '宏利货币B') return;
     cashHtml += '<div class="row"><span class="l">' + c.name + '</span><span class="r">' + fmt(c.amount || 0) + '</span></div>';
   });
   document.getElementById('cashList').innerHTML = cashHtml || '<div class="empty">暂无</div>';
@@ -165,6 +206,10 @@ function render(snap) {
     fundHtml += '<div class="row"><span class="l">' + h.name + '<span class="code">' + code + '</span></span><span class="r">' + fmt(mv) + ' <span class="' + (g >= 0 ? 'pos' : 'neg') + '" style="font-size:12px">' + (g >= 0 ? '+' : '') + fmtShort(g) + '</span></span></div>';
     if (h.pending > 0) fundHtml += '<div class="row"><span class="l">↳ 在途</span><span class="r">' + fmt(h.pending) + '</span></div>';
   });
+  if (moneyAmt > 0) {
+    var mg = moneyAmt - moneyCost;
+    fundHtml += '<div class="row"><span class="l">宏利货币B<span class="code">货基</span></span><span class="r">' + fmt(moneyAmt) + ' <span class="' + (mg >= 0 ? 'pos' : 'neg') + '" style="font-size:12px">' + (mg >= 0 ? '+' : '') + fmtShort(mg) + '</span></span></div>';
+  }
   document.getElementById('fundList').innerHTML = fundHtml;
 
   // 本月消费 + 分类
@@ -185,6 +230,9 @@ function render(snap) {
     catHtml += '<div class="cat-bar"><span class="name">' + c + '</span><span class="bar"><i style="width:' + pct.toFixed(1) + '%"></i></span><span class="amt">' + fmtShort(catMap[c]) + '</span></div>';
   });
   document.getElementById('catList').innerHTML = catHtml;
+  var PIE_COLORS = ['#4f8cff', '#f59e0b', '#a78bfa', '#34d399', '#f87171', '#22d3ee', '#e879f9', '#64748b'];
+  var pieData = cats.map(function (c, i) { return { name: c, value: catMap[c], color: PIE_COLORS[i % PIE_COLORS.length] }; });
+  drawPie(document.getElementById('pieChart'), pieData);
 
   // 最近消费
   var recent = expenses.slice().sort(function (a, b) { return b.date < a.date ? -1 : (b.date > a.date ? 1 : 0); }).slice(0, 10);
