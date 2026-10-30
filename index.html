@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>金融看板</title>
+<style>
+  :root { --bg:#0f1420; --card:#1a2130; --card-2:#202a3d; --text:#e8ecf4; --muted:#8b96ab; --accent:#4f8cff; --accent-2:#34d399; --danger:#f87171; --border:#2b3650; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin:0; font-family:-apple-system,"PingFang SC","Microsoft YaHei",sans-serif; background:var(--bg); color:var(--text); min-height:100vh; padding:20px 16px 40px; }
+  .wrap { max-width:560px; margin:0 auto; }
+  header { margin-bottom:16px; }
+  header h1 { margin:0 0 4px; font-size:20px; }
+  header .sub { color:var(--muted); font-size:12px; }
+  .card { background:var(--card); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:14px; }
+  .card h2 { margin:0 0 12px; font-size:13px; font-weight:600; color:var(--muted); letter-spacing:1px; }
+  .big { text-align:center; padding:4px 0 8px; }
+  .big .v { font-size:34px; font-weight:700; font-variant-numeric:tabular-nums; }
+  .big .k { font-size:12px; color:var(--muted); margin-top:4px; }
+  .gain-row { display:flex; justify-content:center; gap:24px; margin-top:8px; }
+  .gain-row .g { text-align:center; }
+  .gain-row .g .v { font-size:16px; font-weight:600; }
+  .gain-row .g .k { font-size:11px; color:var(--muted); }
+  .pos { color:var(--accent-2); } .neg { color:var(--danger); }
+  .row { display:flex; justify-content:space-between; align-items:center; padding:8px 0; border-bottom:1px solid rgba(43,54,80,.5); font-size:14px; }
+  .row:last-child { border-bottom:none; }
+  .row .l { color:var(--text); }
+  .row .l .code { font-size:11px; color:#5b6780; margin-left:6px; }
+  .row .r { font-variant-numeric:tabular-nums; }
+  .cat-bar { display:flex; align-items:center; gap:10px; margin:8px 0; }
+  .cat-bar .name { width:52px; font-size:13px; color:var(--muted); flex-shrink:0; }
+  .cat-bar .bar { flex:1; height:8px; background:var(--card-2); border-radius:4px; overflow:hidden; }
+  .cat-bar .bar i { display:block; height:100%; background:var(--accent); border-radius:4px; }
+  .cat-bar .amt { font-size:13px; font-variant-numeric:tabular-nums; }
+  .empty { color:#5b6780; text-align:center; padding:14px 0; font-size:13px; }
+  .tip { color:#5b6780; font-size:11px; text-align:center; margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>金融看板</h1>
+    <div class="sub" id="updated">加载中…</div>
+  </header>
+
+  <div class="card">
+    <div class="big">
+      <div class="v" id="totalValue">—</div>
+      <div class="k">总资产（含活钱）</div>
+    </div>
+    <div class="gain-row">
+      <div class="g"><div class="v pos" id="gain">—</div><div class="k">累计收益</div></div>
+      <div class="g"><div class="v" id="gainRate">—</div><div class="k">收益率</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>现金账户</h2>
+    <div id="cashList"></div>
+  </div>
+
+  <div class="card">
+    <h2>基金持仓</h2>
+    <div id="fundList"></div>
+  </div>
+
+  <div class="card">
+    <h2>本月消费</h2>
+    <div class="big" style="padding:0 0 8px">
+      <div class="v" id="monthExp" style="font-size:26px">—</div>
+    </div>
+    <div id="catList"></div>
+  </div>
+
+  <div class="card">
+    <h2>最近消费</h2>
+    <div id="expList"></div>
+  </div>
+
+  <div class="tip">数据为电脑最近一次刷新时的快照 · 手机记账后，电脑刷新即可更新</div>
+</div>
+
+<script>
+var GIST_ID = 'be08b8c65fb4b278f60f7c879a7f0200';
+var token = new URLSearchParams(location.search).get('token');
+
+function fmt(n) { return '¥ ' + (Math.round(n * 100) / 100).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function fmtShort(n) { return '¥ ' + (Math.round(n * 100) / 100).toLocaleString('zh-CN', { maximumFractionDigits: 2 }); }
+
+if (!token) {
+  document.getElementById('updated').textContent = '缺少访问密钥（token），请用完整网址打开';
+} else {
+  fetch('https://api.github.com/gists/' + GIST_ID, { headers: { Authorization: 'token ' + token } })
+    .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function (j) { return JSON.parse(j.files['dashboard.json'].content); })
+    .then(render)
+    .catch(function (e) { document.getElementById('updated').textContent = '加载失败：' + e.message; });
+}
+
+function render(snap) {
+  var prices = snap.prices || {};
+  var cash = snap.cash || [];
+  var tx = snap.transactions || [];
+  var expenses = snap.expenses || [];
+
+  // 基金持仓
+  var holdings = {};
+  tx.forEach(function (t) {
+    if (t.type === 'money') return;
+    if (!holdings[t.code]) holdings[t.code] = { name: t.name, shares: 0, cost: 0, pending: 0 };
+    var h = holdings[t.code];
+    if (t.direction === 'buy') {
+      if (t.status === 'pending') h.pending += t.amount;
+      else { h.shares += (t.shares || 0); h.cost += t.amount; }
+    }
+  });
+
+  var fundValue = 0, fundCost = 0, pendingTotal = 0;
+  Object.keys(holdings).forEach(function (code) {
+    var h = holdings[code];
+    var nav = prices[code] ? prices[code].nav : 0;
+    fundValue += h.shares * nav;
+    fundCost += h.cost;
+    pendingTotal += h.pending;
+  });
+
+  // 现金
+  var cashTotal = 0, moneyAmt = 0, moneyCost = 0;
+  cash.forEach(function (c) {
+    cashTotal += (c.amount || 0);
+    if (c.name === '宏利货币B') { moneyAmt = c.amount || 0; moneyCost = c.cost || 0; }
+  });
+
+  var investValue = fundValue + pendingTotal + moneyAmt;
+  var investCost = fundCost + pendingTotal + moneyCost;
+  var gain = investValue - investCost;
+  var totalValue = investValue + (cashTotal - moneyAmt);
+
+  document.getElementById('updated').textContent = '更新于 ' + (snap.updated || '—');
+  document.getElementById('totalValue').textContent = fmt(totalValue);
+  var gainEl = document.getElementById('gain');
+  gainEl.textContent = (gain >= 0 ? '+' : '') + fmt(gain);
+  gainEl.className = 'v ' + (gain >= 0 ? 'pos' : 'neg');
+  var rateEl = document.getElementById('gainRate');
+  var rate = investCost > 0 ? (gain / investCost * 100) : 0;
+  rateEl.textContent = (rate >= 0 ? '+' : '') + rate.toFixed(2) + '%';
+  rateEl.className = 'v ' + (rate >= 0 ? 'pos' : 'neg');
+
+  // 现金账户
+  var cashHtml = '';
+  cash.forEach(function (c) {
+    cashHtml += '<div class="row"><span class="l">' + c.name + '</span><span class="r">' + fmt(c.amount || 0) + '</span></div>';
+  });
+  document.getElementById('cashList').innerHTML = cashHtml || '<div class="empty">暂无</div>';
+
+  // 基金持仓
+  var fundHtml = '';
+  var codes = Object.keys(holdings);
+  if (codes.length === 0) fundHtml = '<div class="empty">暂无持仓</div>';
+  codes.forEach(function (code) {
+    var h = holdings[code];
+    var nav = prices[code] ? prices[code].nav : 0;
+    var mv = h.shares * nav;
+    var g = mv - h.cost;
+    fundHtml += '<div class="row"><span class="l">' + h.name + '<span class="code">' + code + '</span></span><span class="r">' + fmt(mv) + ' <span class="' + (g >= 0 ? 'pos' : 'neg') + '" style="font-size:12px">' + (g >= 0 ? '+' : '') + fmtShort(g) + '</span></span></div>';
+    if (h.pending > 0) fundHtml += '<div class="row"><span class="l">↳ 在途</span><span class="r">' + fmt(h.pending) + '</span></div>';
+  });
+  document.getElementById('fundList').innerHTML = fundHtml;
+
+  // 本月消费 + 分类
+  var month = (snap.updated || '').slice(0, 7);
+  var monthTotal = 0, catMap = {};
+  expenses.forEach(function (e) {
+    if (e.date.slice(0, 7) === month) {
+      monthTotal += e.amount;
+      catMap[e.category] = (catMap[e.category] || 0) + e.amount;
+    }
+  });
+  document.getElementById('monthExp').textContent = fmt(monthTotal);
+  var cats = Object.keys(catMap).sort(function (a, b) { return catMap[b] - catMap[a]; });
+  var catHtml = '';
+  if (cats.length === 0) catHtml = '<div class="empty">本月暂无消费</div>';
+  cats.forEach(function (c) {
+    var pct = monthTotal > 0 ? (catMap[c] / monthTotal * 100) : 0;
+    catHtml += '<div class="cat-bar"><span class="name">' + c + '</span><span class="bar"><i style="width:' + pct.toFixed(1) + '%"></i></span><span class="amt">' + fmtShort(catMap[c]) + '</span></div>';
+  });
+  document.getElementById('catList').innerHTML = catHtml;
+
+  // 最近消费
+  var recent = expenses.slice().sort(function (a, b) { return b.date < a.date ? -1 : (b.date > a.date ? 1 : 0); }).slice(0, 10);
+  var expHtml = '';
+  if (recent.length === 0) expHtml = '<div class="empty">暂无消费</div>';
+  recent.forEach(function (e) {
+    expHtml += '<div class="row"><span class="l">' + e.date.slice(5) + ' ' + e.category + (e.note ? '<span class="code">' + e.note + '</span>' : '') + '</span><span class="r">' + fmt(e.amount) + '</span></div>';
+  });
+  document.getElementById('expList').innerHTML = expHtml;
+}
+</script>
+</body>
+</html>
