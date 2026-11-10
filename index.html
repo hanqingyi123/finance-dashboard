@@ -87,6 +87,7 @@
       <div class="field"><label>金额</label><input type="number" id="expAmt" inputmode="decimal" step="0.01" placeholder="0.00"></div>
       <div class="cats" id="expCats"></div>
       <div class="accs" id="expAccs"></div>
+      <div class="field"><label>日期</label><input type="date" id="expDate"></div>
       <div class="field"><label>备注（可选）</label><input type="text" id="expNote" placeholder="如 王繁星面馆"></div>
       <button class="btn" id="expSave">保存</button>
       <div class="msg" id="expMsg"></div>
@@ -106,6 +107,7 @@
       </datalist>
       <div class="field"><label>金额</label><input type="number" id="buyAmt" inputmode="decimal" step="0.01" placeholder="0.00"></div>
       <div class="accs" id="buyAccs"></div>
+      <div class="field"><label>日期</label><input type="date" id="buyDate"></div>
       <div class="field"><label>份额（可空=在途）</label><input type="number" id="buyShares" inputmode="decimal" step="0.01" placeholder="留空"></div>
       <div class="field"><label>净值（可空）</label><input type="number" id="buyNav" inputmode="decimal" step="0.0001" placeholder="留空"></div>
       <div class="field"><label>申购费（可空）</label><input type="number" id="buyFee" inputmode="decimal" step="0.01" placeholder="0"></div>
@@ -121,6 +123,14 @@
       <div class="field"><label>月份</label><input type="month" id="salMonth"></div>
       <div class="field"><label>到手工资</label><input type="number" id="salAmt" inputmode="decimal" step="0.01" placeholder="15000"></div>
       <div class="field"><label>储蓄与投资（入银行卡7978）</label><input type="number" id="salSaving" inputmode="decimal" step="0.01" placeholder="12000"></div>
+      <div class="field"><label style="display:flex;align-items:center;gap:6px"><input type="checkbox" id="salSettled" style="width:auto"> 已入账（历史工资，本次不加减现金）</label></div>
+      <div class="field"><label>公积金·单位</label><input type="number" id="salHfEmployer" inputmode="decimal" step="0.01" placeholder="0"></div>
+      <div class="field"><label>公积金·个人</label><input type="number" id="salHfPersonal" inputmode="decimal" step="0.01" placeholder="0"></div>
+      <div class="field"><label>养老·单位</label><input type="number" id="salPensionEmployer" inputmode="decimal" step="0.01" placeholder="0"></div>
+      <div class="field"><label>养老·个人</label><input type="number" id="salPensionPersonal" inputmode="decimal" step="0.01" placeholder="0"></div>
+      <div class="field"><label>医疗·单位</label><input type="number" id="salMedicalEmployer" inputmode="decimal" step="0.01" placeholder="0"></div>
+      <div class="field"><label>医疗·个人</label><input type="number" id="salMedicalPersonal" inputmode="decimal" step="0.01" placeholder="0"></div>
+      <div class="field"><label>额外补贴</label><div id="subsidyList"></div><button class="btn" id="addSubsidy" type="button" style="padding:8px;font-size:12px;background:var(--card-2);color:var(--accent)">＋ 添加补贴</button></div>
       <div class="tip">剩余（到手−储蓄）自动入微信零钱</div>
       <button class="btn" id="salSave">保存</button>
       <div class="msg" id="salMsg"></div>
@@ -134,6 +144,7 @@
       <div class="field"><label>转出</label><select id="trfFrom"></select></div>
       <div class="field"><label>转入</label><select id="trfTo"></select></div>
       <div class="field"><label>金额</label><input type="number" id="trfAmt" inputmode="decimal" step="0.01" placeholder="0.00"></div>
+      <div class="field"><label>日期</label><input type="date" id="trfDate"></div>
       <div class="field"><label>备注（可选）</label><input type="text" id="trfNote" placeholder="如 还信用卡"></div>
       <button class="btn" id="trfSave">保存</button>
       <div class="msg" id="trfMsg"></div>
@@ -149,6 +160,7 @@
       <div class="field"><label>分类</label>
         <select id="incCat"><option value="顺风车">顺风车</option><option value="父母额外给付">父母额外给付</option><option value="其他收入">其他收入</option></select>
       </div>
+      <div class="field"><label>日期</label><input type="date" id="incDate"></div>
       <div class="field"><label>备注（可选）</label><input type="text" id="incNote" placeholder=""></div>
       <button class="btn" id="incSave">保存</button>
       <div class="msg" id="incMsg"></div>
@@ -344,6 +356,37 @@ function renderSelectors() {
   ACCOUNTS.forEach(function (a) { var o1 = document.createElement('option'); o1.value = a; o1.textContent = a; trfFrom.appendChild(o1); var o2 = document.createElement('option'); o2.value = a; o2.textContent = a; trfTo.appendChild(o2); });
   trfFrom.value = '银行卡 7978'; trfTo.value = '微信零钱';
   document.getElementById('salMonth').value = (state.snapshot.updated || today()).slice(0, 7);
+  document.getElementById('expDate').value = today();
+  document.getElementById('buyDate').value = today();
+  document.getElementById('trfDate').value = today();
+  document.getElementById('incDate').value = today();
+}
+
+function addSubsidyRow(amount, note) {
+  var list = document.getElementById('subsidyList');
+  var row = document.createElement('div');
+  row.style.cssText = 'display:flex;gap:6px;margin-bottom:6px';
+  var inp = document.createElement('input');
+  inp.type = 'number'; inp.step = '0.01'; inp.placeholder = '金额'; inp.value = (amount != null ? amount : '');
+  inp.style.cssText = 'flex:1;background:var(--card-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;padding:8px 10px;outline:none;min-width:0';
+  var noteInp = document.createElement('input');
+  noteInp.type = 'text'; noteInp.placeholder = '备注'; noteInp.value = (note || '');
+  noteInp.style.cssText = 'flex:2;background:var(--card-2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;padding:8px 10px;outline:none;min-width:0';
+  var del = document.createElement('button');
+  del.type = 'button'; del.textContent = '删'; del.style.cssText = 'background:transparent;border:1px solid var(--danger);color:var(--danger);border-radius:8px;font-size:12px;padding:0 10px;cursor:pointer';
+  del.addEventListener('click', function () { row.remove(); });
+  row.appendChild(inp); row.appendChild(noteInp); row.appendChild(del);
+  list.appendChild(row);
+}
+
+function collectSubsidies() {
+  var out = [];
+  document.querySelectorAll('#subsidyList div').forEach(function (row) {
+    var amt = parseFloat(row.querySelector('input[type=number]').value) || 0;
+    var note = row.querySelectorAll('input')[1].value.trim();
+    if (amt > 0) out.push({ amount: amt, note: note });
+  });
+  return out;
 }
 
 function selVal(containerId) { var el = document.querySelector('#' + containerId + ' .on'); return el ? el.dataset.val : null; }
@@ -355,7 +398,7 @@ document.getElementById('expSave').addEventListener('click', function () {
   if (!amount || amount <= 0) { msg('expMsg', '请输入金额', false); return; }
   var category = selVal('expCats'), account = selVal('expAccs');
   if (!category || !account) { msg('expMsg', '请选分类和账户', false); return; }
-  var content = today() + ',' + amount + ',' + category + ',' + account + ',' + (document.getElementById('expNote').value.trim() || '');
+  var content = (document.getElementById('expDate').value || today()) + ',' + amount + ',' + category + ',' + account + ',' + (document.getElementById('expNote').value.trim() || '');
   addPending('exp_', content, function () { msg('expMsg', '已记 ' + category + ' ' + amount + ' 元', true); document.getElementById('expAmt').value = ''; document.getElementById('expNote').value = ''; });
 });
 
@@ -369,7 +412,7 @@ document.getElementById('buySave').addEventListener('click', function () {
   var shares = parseFloat(document.getElementById('buyShares').value) || 0;
   var nav = parseFloat(document.getElementById('buyNav').value) || 0;
   var fee = parseFloat(document.getElementById('buyFee').value) || 0;
-  var content = code + ',' + amount + ',' + source + ',' + today() + ',' + shares + ',' + nav + ',' + fee;
+  var content = code + ',' + amount + ',' + source + ',' + (document.getElementById('buyDate').value || today()) + ',' + shares + ',' + nav + ',' + fee;
   addPending('buy_', content, function () { msg('buyMsg', '已记买入 ' + code + ' ' + amount + ' 元', true); document.getElementById('buyAmt').value = ''; document.getElementById('buyShares').value = ''; document.getElementById('buyNav').value = ''; document.getElementById('buyFee').value = ''; });
 });
 
@@ -380,8 +423,18 @@ document.getElementById('salSave').addEventListener('click', function () {
   var saving = parseFloat(document.getElementById('salSaving').value) || 0;
   if (!month || !amount || amount <= 0) { msg('salMsg', '请填写月份和金额', false); return; }
   if (saving > amount) { msg('salMsg', '储蓄不能大于到手', false); return; }
-  var content = month + ',' + amount + ',' + saving;
-  addPending('sal_', content, function () { msg('salMsg', '已录 ' + month + ' 工资', true); document.getElementById('salAmt').value = ''; document.getElementById('salSaving').value = ''; });
+  var obj = {
+    month: month, amount: amount, saving: saving,
+    settled: document.getElementById('salSettled').checked,
+    hfEmployer: parseFloat(document.getElementById('salHfEmployer').value) || 0,
+    hfPersonal: parseFloat(document.getElementById('salHfPersonal').value) || 0,
+    pensionEmployer: parseFloat(document.getElementById('salPensionEmployer').value) || 0,
+    pensionPersonal: parseFloat(document.getElementById('salPensionPersonal').value) || 0,
+    medicalEmployer: parseFloat(document.getElementById('salMedicalEmployer').value) || 0,
+    medicalPersonal: parseFloat(document.getElementById('salMedicalPersonal').value) || 0,
+    subsidies: collectSubsidies()
+  };
+  addPending('sal_', JSON.stringify(obj), function () { msg('salMsg', '已录 ' + month + ' 工资', true); document.getElementById('salAmt').value = ''; document.getElementById('salSaving').value = ''; });
 });
 
 // 转账
@@ -389,7 +442,7 @@ document.getElementById('trfSave').addEventListener('click', function () {
   var from = document.getElementById('trfFrom').value, to = document.getElementById('trfTo').value;
   var amount = parseFloat(document.getElementById('trfAmt').value);
   if (!from || !to || from === to || !amount || amount <= 0) { msg('trfMsg', '请填写转出/转入和金额', false); return; }
-  var content = today() + ',' + from + ',' + to + ',' + amount + ',' + (document.getElementById('trfNote').value.trim() || '');
+  var content = (document.getElementById('trfDate').value || today()) + ',' + from + ',' + to + ',' + amount + ',' + (document.getElementById('trfNote').value.trim() || '');
   addPending('trf_', content, function () { msg('trfMsg', '已转账 ' + from + ' → ' + to + ' ' + amount + ' 元', true); document.getElementById('trfAmt').value = ''; document.getElementById('trfNote').value = ''; });
 });
 
@@ -399,9 +452,11 @@ document.getElementById('incSave').addEventListener('click', function () {
   if (!amount || amount <= 0) { msg('incMsg', '请输入金额', false); return; }
   var account = selVal('incAccs'), category = document.getElementById('incCat').value;
   if (!account) { msg('incMsg', '请选账户', false); return; }
-  var content = today() + ',' + amount + ',' + account + ',' + category + ',' + (document.getElementById('incNote').value.trim() || '');
+  var content = (document.getElementById('incDate').value || today()) + ',' + amount + ',' + account + ',' + category + ',' + (document.getElementById('incNote').value.trim() || '');
   addPending('inc_', content, function () { msg('incMsg', '已记 ' + category + ' ' + amount + ' 元', true); document.getElementById('incAmt').value = ''; document.getElementById('incNote').value = ''; });
 });
+
+document.getElementById('addSubsidy').addEventListener('click', function () { addSubsidyRow(); });
 
 // 初始化
 if (!token) {
